@@ -29,7 +29,7 @@ export function run(client: Discord.Client, message: Discord.Message, args: stri
   });
 
   const embed = Helpers.TemplatedMessageEmbed()
-    .setTitle('DoseBot Redux Help')
+    .setTitle('DoseBot Plus Help')
     .addField('Temporary roles', generateRoleField(availableTemporaryRoles))
     .addField('Permanent roles', generateRoleField(availablePermanentRoles));
 

@@ -9,7 +9,7 @@ export function run(client: Discord.Client, message: Discord.Message, args: stri
   const avatar = user.avatarURL({size: 2048});
   if (avatar != null) {
     const embed = Helpers.TemplatedMessageEmbed()
-      .setTitle('DoseBot Redux Avatar Service')
+      .setTitle('DoseBot Plus Avatar Service')
       .setImage(avatar);
     message.reply({ embeds: [embed], files: ["./assets/logo.png"] });
   } else {

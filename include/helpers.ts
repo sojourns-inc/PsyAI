@@ -5,7 +5,7 @@ export function TemplatedMessageEmbed() {
     .setTimestamp()
     
     // .attachFiles(["./assets/logo.png"])
-    .setAuthor('DoseBot Redux', 'attachment://logo.png')
+    .setAuthor('DoseBot Plus', 'attachment://logo.png')
     .setThumbnail('attachment://logo.png')
     .setColor('#747474')
     .setURL("https://github.com/dosebotredux")

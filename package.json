@@ -1,10 +1,10 @@
 {
-  "name": "dosebot-redux",
+  "name": "dosebot-plus",
   "version": "3.0.0",
   "description": "Dosage bot",
+  "repository": "https://github.com/alevkov/DosebotRedux"
   "main": "bot.js",
-  "repository": "https://github.com/wjlafrance/DosebotRedux.git",
-  "author": "wjlafrance",
+  "author": "sernyl",
   "license": "Unlicense",
   "dependencies": {
     "bufferutil": "^4.0.0",

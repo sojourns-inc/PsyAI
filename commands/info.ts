@@ -6,6 +6,7 @@ import { sanitizeSubstanceName } from '../include/sanitize-substance-name.js';
 import { customs as customsJSON } from '../include/customs';
 import { infoQuery } from '../queries/info';
 import * as Helpers from '../include/helpers.js';
+import * as DBank from '../include/types';
 
 interface PsychonautWikiSubstance {
   name: string;
@@ -99,6 +100,16 @@ const fetchPWSubstanceData = async (substanceName: string) => {
   );
 }
 
+const fetchDbankSubstanceData = async (substanceName: string) => {
+  return fetchAndParseURL(
+    `https://data.mongodb-api.com/app/data-dwxsv/endpoint/drug?name=${substanceName}`
+  );
+}
+
+const fetchMolecule = (smiles: string) => {
+  return `http://hulab.rxnfinder.org/smi2img/${smiles}/`
+}
+
 export const applicationCommandData = new SlashCommandBuilder()
   .setName("info")
   .setDescription("Get basic info about a substance")
@@ -115,12 +126,16 @@ export async function performInteraction(interaction: Discord.CommandInteraction
 
   // Find the location of the substance object in the JSON and set substance
   const custom_substance = locateCustomSheetLocation(substanceName);
+  const extra_info_result: Array<DBank.DBDrug> = await fetchDbankSubstanceData(substanceName[0].toUpperCase() + substanceName.slice(1));
+  const extra_info = extra_info_result.length > 0 ? extra_info_result[0] : undefined;
+  console.log(extra_info)
+  const moleculeImage = fetchMolecule((extra_info as DBank.DBDrug)['calculated-properties'].property.filter((p) => p.kind === "SMILES")[0].value);
 
   // Checks to see if drug is on the customs list
   if (custom_substance != undefined) {
     console.log('Pulling from custom');
 
-    interaction.reply({ embeds: [ createPWChannelMessage(custom_substance) ], files: ["./assets/logo.png"] });
+    interaction.reply({ embeds: [ createPWChannelMessage(custom_substance, extra_info, moleculeImage) ], files: ["./assets/logo.png"] });
   } else {
     console.log('Pulling from PW');
 
@@ -146,7 +161,7 @@ export async function performInteraction(interaction: Discord.CommandInteraction
       } else {
         const substance = responseData.data[0];
 
-        interaction.reply({ embeds: [ createTSChannelMessage(substance) ], files: ["./assets/logo.png"] });
+        interaction.reply({ embeds: [ createTSChannelMessage(substance, extra_info) ], files: ["./assets/logo.png"] });
       }
 
       return;
@@ -156,17 +171,27 @@ export async function performInteraction(interaction: Discord.CommandInteraction
     } else {
       // Set substance to the first returned substance from PW API
       const substance = data.substances[0];
-      interaction.reply({ embeds: [ createPWChannelMessage(substance) ], files: ["./assets/logo.png"] });
+      interaction.reply({ embeds: [ createPWChannelMessage(substance, extra_info, moleculeImage) ], files: ["./assets/logo.png"] });
     }
   }
 }
 
+
+
 // Functions
 //// Create a MessageEmbed powered message utilizing the various field builder functions
-function createPWChannelMessage(substance: PsychonautWikiSubstance): Discord.MessageEmbed {
+function createPWChannelMessage(substance: PsychonautWikiSubstance, extra_info: DBank.DBDrug | undefined, moleculeImage: any): Discord.MessageEmbed {
+
+
   return Helpers.TemplatedMessageEmbed()
     .setTitle(`**${capitalize(substance.name)} drug information**`)
-    .addField(':telescope: __Class__', buildChemicalClassField(substance) + '\n' + buildPsychoactiveClassField(substance))
+    .setThumbnail(moleculeImage)
+    .addField(':information_source: __Description__', buildDbankDescriptionField(extra_info as DBank.DBDrug))
+    .addField(':warning: __Adverse Effects & Toxicity__', buildDbankToxicityField(extra_info as DBank.DBDrug))
+    .addField(':arrows_counterclockwise: __Metabolism__', buildDbankMetabolismField(extra_info as DBank.DBDrug))
+    .addField(':arrow_down: __Absorption__', buildDbankAbsorptionField(extra_info as DBank.DBDrug))
+    .addField(':woman_scientist: __Synthesis Reference__', buildDbankSynthesisField(extra_info as DBank.DBDrug))
+    .addField(':telescope: __Class__', buildChemicalClassField(substance, extra_info as DBank.DBDrug) + '\n' + buildPsychoactiveClassField(substance))
     .addField(':scales: __Dosages__', `${buildPWDosageField(substance)}\n`, true)
     .addField(':clock2: __Duration__', `${buildPWDurationField(substance)}\n`, true)
     .addField(':warning: __Addiction potential__', buildAddictionPotentialField(substance), true)
@@ -371,12 +396,20 @@ function buildPWDurationField(substance: PsychonautWikiSubstance) {
 }
 
 // Builds the chemical class field
-function buildChemicalClassField(substance: PsychonautWikiSubstance) {
+function buildChemicalClassField(substance: PsychonautWikiSubstance & TripsafeSubstance, extra_info: DBank.DBDrug) {
+  if (substance.class === undefined) {
+    if (extra_info.classification !== undefined) {
+      return `**[Chemical] Class**: ${extra_info.classification.class}` + '\n' + `**[Chemical] Superclass**: ${extra_info.classification.superclass}` + '\n' + `**[Chemical] Subclass**: ${extra_info.classification.subclass}` + '\n' + `**Substituent**: ${extra_info.classification.substituent.slice(0, 3)}`
+    }
+  }
   if ((typeof substance.class != undefined) &&
       (substance.class !== null) &&
       (typeof substance.class.chemical != undefined) &&
       (substance.class.chemical != null))
   {
+    if (extra_info.classification !== undefined) {
+      return `**[Chemical] Class**: ${extra_info.classification.class}` + '\n' + `**[Chemical] Superclass**: ${extra_info.classification.superclass}` + '\n' + `**[Chemical] Subclass**: ${extra_info.classification.subclass}` + '\n' + `**Substituent**: ${extra_info.classification.substituent.slice(0, 3)}`
+    }
     return `**Chemical**: ${substance.class.chemical[0]}`;
   } else {
     return 'No chemical class information.';
@@ -410,9 +443,13 @@ function buildLinksField(substance: PsychonautWikiSubstance) {
   return `[PsychonautWiki](https://psychonautwiki.org/wiki/${ substance.name.replace(/ /g, '_',) }) - [Effect Index](https://www.effectindex.com) - [Drug combination chart](https://wiki.tripsit.me/images/3/3a/Combo_2.png)`;
 }
 
-function createTSChannelMessage(substance: TripsafeSubstance): Discord.MessageEmbed {
+function createTSChannelMessage(substance: TripsafeSubstance, extra_info: DBank.DBDrug | undefined): Discord.MessageEmbed {
   return Helpers.TemplatedMessageEmbed()
     .setTitle(`**${substance.pretty_name} drug information**`)
+    .addField(':warning: __Adverse Effects & Toxicity__', buildDbankToxicityField(extra_info as DBank.DBDrug))
+    .addField(':arrows_counterclockwise: __Metabolism__', buildDbankMetabolismField(extra_info as DBank.DBDrug))
+    .addField(':arrow_down: __Absorption__', buildDbankAbsorptionField(extra_info as DBank.DBDrug))
+    .addField(':telescope: __Class__', buildChemicalClassField(substance, extra_info as DBank.DBDrug) + '\n' + buildPsychoactiveClassField(substance))
     .addField(':scales: __Dosages__', `${buildTSDosageField(substance)}\n`, true)
     .addField(':clock2: __Duration__', `${buildTSDurationField(substance)}\n`, true)
     .addField(':globe_with_meridians: __Links__', buildTSLinksField(substance));
@@ -458,3 +495,25 @@ function lowerNoSpaceName(str: string) {
     .replace(/^[^\s]+ /, '') // remove first word
     .replace(/ /g, '');
 }
+
+function buildDbankDescriptionField(extra_info: DBank.DBDrug) {
+  return extra_info.description;
+}
+
+function buildDbankToxicityField(extra_info: DBank.DBDrug) {
+  return extra_info.toxicity.replace('<sub>', '').replace('</sub>', '');
+}
+
+function buildDbankMetabolismField(extra_info: DBank.DBDrug) {
+  return extra_info.metabolism;
+}
+
+function buildDbankAbsorptionField(extra_info: DBank.DBDrug) {
+  return extra_info.absorption;
+}
+
+function buildDbankSynthesisField(extra_info: DBank.DBDrug) {
+  return extra_info['synthesis-reference'];
+}
+
+
