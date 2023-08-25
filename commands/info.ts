@@ -154,7 +154,7 @@ export const applicationCommandData = new SlashCommandBuilder()
 
   export async function performInteraction(interaction: Discord.CommandInteraction) {
     try {
-      /*
+
       const discordUserId = interaction.user.id;
       // Check if the user has an active subscription
       if (!(await checkStripeSub(discordUserId))) {
@@ -166,7 +166,7 @@ export const applicationCommandData = new SlashCommandBuilder()
       
         return;
       }
-      */
+
       const substanceName = parseSubstanceName(interaction.options.getString("substance", true));
       const substanceNameCap = substanceName.charAt(0)?.toUpperCase() + substanceName.slice(1);
       console.log(`Requesting info for ${substanceName}`);
