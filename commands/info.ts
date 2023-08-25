@@ -19,37 +19,32 @@ function createDrugInfoCard(): string {
 [Gabapentin](${searchUrl}) drug information
 
 🔭 *Class*
-
-* ✴️ *Chemical:* ➡️ Gabapentinoids
-* ✴️ *Psychoactive:* ➡️ Depressant
+* ✴️ *Chemical* ➡️ **Gabapentinoids**
+* ✴️ *Psychoactive* ➡️ **Depressant**
 
 ⚖️ *Dosages*
-
-* ✴️ *ORAL ✴️*
-  - *Threshold:* 200mg
-  - *Light:* 200 - 600mg
-  - *Common:* 600 - 900mg
-  - *Strong:* 900 - 1200mg
-  - *Heavy:* 1200mg
+* ✴️ **ORAL** ✴️
+  - *Threshold*: 200mg
+  - *Light*: 200 - 600mg
+  - *Common*: 600 - 900mg
+  - *Strong*: 900 - 1200mg
+  - *Heavy*: 1200mg
 
 ⏱️ *Duration*
+* ✴️ *ORAL* ✴️
+  - *Onset*: 30 - 90 minutes
+  - *Total*: 5 - 8 hours
 
-* ✴️ *ORAL ✴️*
-  - *Onset:* 30 - 90 minutes
-  - *Total:* 5 - 8 hours
-
-⚠️ *Addiction Potential ⚠️*
-
+⚠️ *Addiction Potential* ⚠️
 * No addiction potential information.
 
-🧠 *Subjective Effects 🧠*
-
-  - *Focus enhancement*
-  - *Euphoria*
+🧠 *Subjective Effects* 🧠
+  - **Focus enhancement**
+  - **Euphoria**
 
 📈 *Tolerance*
-  - *Full:* with prolonged continuous usage
-  - *Baseline:* 7-14 days
+  - *Full*: with prolonged continuous usage
+  - *Baseline*: 7-14 days
 `;
 
   return infoCard;
@@ -123,9 +118,9 @@ const fetchDoseCardFromPsyAI = async (substanceName: string, chatId: string) => 
       "model": process.env.LLM_MODEL_ID,
       "question": `Generate a drug information card for ${substanceName}. Respond only with the card. Use the provided example and follow the exact syntax given.\n\n Example drug information card for Gabapentin:\n\n`
           + createDrugInfoCard()
-          + `\n\nNote: Not every section from the example dose card is required, and you may add additional sections if needed. Please keep the formatting compact and uniform using Markdown.`,
-      "temperature": "0.4",
-      "max_tokens": 10000,
+          + `\n\nNote: Not every section from the example dose card is required, and you may add additional sections if needed. Please keep the formatting compact and uniform using Markdown, minimizing the space between the sections.`,
+      "temperature": "0.25",
+      "max_tokens": 1000,
   };  
 
     return postAndParseURL(`${process.env.BRAIN_BASE_URL}/chat/` + chatId + "/question", raw)
