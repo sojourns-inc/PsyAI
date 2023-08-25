@@ -9,10 +9,10 @@ export function run(client: Discord.Client, message: Discord.Message, args: stri
   const avatar = user.avatarURL({size: 2048});
   if (avatar != null) {
     const embed = Helpers.TemplatedMessageEmbed()
-      .setTitle('DoseBot Plus Avatar Service')
+      .setTitle('PsyAI Avatar Service')
       .setImage(avatar);
     message.reply({ embeds: [embed], files: ["./assets/logo.png"] });
   } else {
     message.reply("Unable to find avatar.");
   }
-};
+}

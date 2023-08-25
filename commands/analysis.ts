@@ -35,8 +35,8 @@ export function run(client: Discord.Client, message: Discord.Message, args: stri
   // All collected messages need to be split if there's a |
   // First half needs to be formatted lowercase with hyphens for links
 
-  // NEXT UP: search recent messages in #subreddit-moderation for posts by dosebot, with emoji reactions.
-  // OR be listening to all reactions and push ones that are to dosebot posts in that channel to a list?
+  // NEXT UP: search recent messages in #subreddit-moderation for posts by PsyAI, with emoji reactions.
+  // OR be listening to all reactions and push ones that are to PsyAI posts in that channel to a list?
   // When would that list get reset?
   // We want to listen on the messageReactionAdd event for making the post-index.
 

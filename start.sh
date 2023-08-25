@@ -1,14 +1,12 @@
 #!/bin/bash
 
-source .env || exit $?
+docker build -t dose-gpt . || exit $?
 
-docker build -t dosebot-plus . || exit $?
-
-docker stop dosebot-plus
-docker rm dosebot-plus
+docker stop dose-gpt
+docker rm dose-gpt
 docker run \
-    --name dosebot-plus \
+    --name dose-gpt \
     --network host \
     -d \
     --env DISCORD_TOKEN="$DISCORD_TOKEN" \
-    dosebot-plus
+    dose-gpt

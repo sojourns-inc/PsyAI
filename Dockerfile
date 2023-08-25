@@ -1,8 +1,8 @@
 FROM node:latest
 
-RUN mkdir /dosebot
-ADD . /dosebot
-WORKDIR /dosebot
+RUN mkdir /PsyAI
+ADD . /PsyAI
+WORKDIR /PsyAI
 
 RUN npm install
 RUN npx tsc

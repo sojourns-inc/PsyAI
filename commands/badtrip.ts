@@ -10,4 +10,4 @@ export function run(client: Discord.Client, message: Discord.Message, args: stri
 
   message.reply({ embeds: [embed], files: ["./assets/logo.png"] })
     .catch(console.error);
-};
+}
