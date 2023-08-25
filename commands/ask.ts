@@ -117,7 +117,7 @@ export const applicationCommandData = new SlashCommandBuilder()
 
 export async function performInteraction(interaction: Discord.CommandInteraction) {
   try {
-    /*
+
     const discordUserId = interaction.user.id;
     // Check if the user has an active subscription
     if (!(await checkStripeSub(discordUserId))) {
@@ -129,7 +129,6 @@ export async function performInteraction(interaction: Discord.CommandInteraction
     
       return;
     }
-    */
 
     // Capture messages posted to a given channel and remove all symbols and put everything into lower case
     const query = interaction.options.getString("query", true);
