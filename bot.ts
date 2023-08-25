@@ -9,14 +9,14 @@ const DiscordClient = new Discord.Client({
 import * as CommandSystem from "./command-system";
 
 DiscordClient.on('ready', async () => {
-  console.log('DoseBot is online - beep boop');
+  console.log('PsyAI is online - beep boop');
 
   if (!DiscordClient.user) {
     console.log("No discord user. What?");
     return;
   }
 
-  if (!!DiscordClient.application) {
+  if (DiscordClient.application) {
     console.log("Setting application commands.");
     DiscordClient.application.commands.set(CommandSystem.applicationCommandData);
   } else {

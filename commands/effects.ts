@@ -103,4 +103,4 @@ export async function run(client: Discord.Client, message: Discord.Message, args
   } catch(err) {
     console.error(err);
   }
-};
+}

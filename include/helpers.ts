@@ -5,9 +5,9 @@ export function TemplatedMessageEmbed() {
     .setTimestamp()
     
     // .attachFiles(["./assets/logo.png"])
-    .setAuthor('DoseBot Plus', 'attachment://logo.png')
+    .setAuthor('PsyAI', 'attachment://logo.png')
     .setThumbnail('attachment://logo.png')
     .setColor('#747474')
-    .setURL("https://github.com/dosebotredux")
+    .setURL("https://github.com/PsyAIredux")
     .setFooter('Please use drugs responsibly', 'attachment://logo.png')
 }

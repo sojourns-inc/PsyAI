@@ -41,4 +41,4 @@ export function infoQuery(substance: string) {
 			}
 		}
 	}`;
-};
+}

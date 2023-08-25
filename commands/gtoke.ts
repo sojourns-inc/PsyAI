@@ -14,7 +14,7 @@ export const applicationCommandData = {
 } as Discord.ApplicationCommandData;
 
 export async function legacy(client: Discord.Client, message: Discord.Message, args: string[]) {
-    let response = await message.reply("Group toke is now a slash command! Type /gtoke.");
+    const response = await message.reply("Group toke is now a slash command! Type /gtoke.");
     await new Promise((resolve) => { setTimeout(resolve, 5 * 1000) });
     response.delete();
 }
@@ -74,7 +74,7 @@ export async function performInteraction(interaction: Discord.CommandInteraction
         ]
         .map(x => Array.from(x.values()))
         .reduce((x, y) => x.concat(y), [ interaction.user ]) // collapse arrays, include initiating user
-        .filter(u => u.id != interaction.client.user?.id) // exclude dosebot's initial reacts
+        .filter(u => u.id != interaction.client.user?.id) // exclude PsyAI's initial reacts
     ));
 
     if (Math.random() > 0.9 && !!(interaction.client.user)) {

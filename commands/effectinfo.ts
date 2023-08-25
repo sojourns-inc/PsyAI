@@ -70,4 +70,4 @@ export function run(client: Discord.Client, message: Discord.Message, args: stri
       return 'https://i.imgur.com/3mENLpk.png';
     }
   }
-};
+}

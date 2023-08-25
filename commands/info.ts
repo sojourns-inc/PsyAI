@@ -1,113 +1,151 @@
 import Discord from 'discord.js';
 import { SlashCommandBuilder } from "@discordjs/builders";
 import rp from 'request-promise';
-
 import { sanitizeSubstanceName } from '../include/sanitize-substance-name.js';
-import { customs as customsJSON } from '../include/customs';
-import { infoQuery } from '../queries/info';
-import * as Helpers from '../include/helpers.js';
-import * as DBank from '../include/types';
+import stripeLib from 'stripe';
+import { createClient } from '@supabase/supabase-js'
 
-interface PsychonautWikiSubstance {
-  name: string;
-  tolerance: any;
-  roas: {
-    name: string;
-    dose: {
-      dosage?: string | null;
-      units?: string | null ;
-      threshold?: MinMax<number> | number | null;
-      light?: MinMax<number> | number | null;
-      common?: MinMax<number> | number | null;
-      strong?: MinMax<number> | null;
-      heavy?: number | null;
-    } | null;
-    duration: {
-      onset: MinMaxUnits<number> | null;
-      comeup: MinMaxUnits<number> | null;
-      peak: MinMaxUnits<number> | null;
-      offset: MinMaxUnits<number> | null;
-      afterglow: MinMaxUnits<number> | null;
-      total: MinMaxUnits<number> | null;
-    } | null;
-  }[];
-  class: {
-    chemical: string[] | null;
-    psychoactive: string[] | null;
-  } | null;
-  addictionPotential: string | null;
+// Initialize Supabase client
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const supabase = createClient(SUPABASE_URL as string, SUPABASE_KEY as string);
+
+// Create a Stripe client
+const stripe = new stripeLib(process.env.STRIPE_API_KEY as string, { typescript: true, apiVersion: '2023-08-16' });
+
+function createDrugInfoCard(): string {
+  const searchUrl = `https://psychonautwiki.org/w/index.php?search=Gabapentin&title=Special%3ASearch&go=Go`;
+  const infoCard = `
+[Gabapentin](${searchUrl}) drug information
+
+🔭 *Class*
+
+* ✴️ *Chemical:* ➡️ Gabapentinoids
+* ✴️ *Psychoactive:* ➡️ Depressant
+
+⚖️ *Dosages*
+
+* ✴️ *ORAL ✴️*
+  - *Threshold:* 200mg
+  - *Light:* 200 - 600mg
+  - *Common:* 600 - 900mg
+  - *Strong:* 900 - 1200mg
+  - *Heavy:* 1200mg
+
+⏱️ *Duration*
+
+* ✴️ *ORAL ✴️*
+  - *Onset:* 30 - 90 minutes
+  - *Total:* 5 - 8 hours
+
+⚠️ *Addiction Potential ⚠️*
+
+* No addiction potential information.
+
+🧠 *Subjective Effects 🧠*
+
+  - *Focus enhancement*
+  - *Euphoria*
+
+📈 *Tolerance*
+  - *Full:* with prolonged continuous usage
+  - *Baseline:* 7-14 days
+`;
+
+  return infoCard;
 }
 
-// $ curl "https://tripbot.tripsit.me/api/tripsit/getDrug?name=LSD"
-type TripsafeSubstance = {
-  name: string;
-  properties: {
-    dose: string;
-    duration: string;
-    onset: string;
-    effects: string;
-    avoid: string;
-    aliases: string[];
-    marquis: string;
-    summary: string;
-    categories: string[];
-    "half-life": string;
-    "after-effects": string;
-    ora: string; 
-  };
-  aliases: string[];
-  categories: string[];
-  formatted_dose: {
-    [key: string]: {
-      [intensity: string]: string;
-    }
-  };
-  // formatted_duration: any;
-  // formatted_onset: any;
-  // formatted_aftereffects: any;
-  pretty_name: string;
-  combos: any[];
-  dose_note: string;
-  links: {
-    experiences: string;
-    tihkal: string;
-  };
-  // sources: any;
-  pweffects: {
-    [key: string]: string;
-  }
-};
-
-const fetchAndParseURL = async (url: string) => {
+async function getUserAssociation(discordUserId: string) {
   try {
-    const responseData = await rp(url);
+    const { data, error } = await supabase
+      .from('user_association')
+      .select('*')
+      .eq('discord_id', discordUserId)
+      .single();
 
-    return JSON.parse(responseData);
-  } catch (err) {
-    console.error(err);
+    if (error) {
+      console.error(error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error(`Error fetching user association: ${error}`);
+    return null;
   }
-
-  return null;
 }
 
-const fetchPWSubstanceData = async (substanceName: string) => {
-  const query = infoQuery(substanceName);
-
-  const encodedQuery = encodeURIComponent(query);
-
-  return fetchAndParseURL(
-    `https://api.psychonautwiki.org/?query=${encodedQuery}`
-  );
+async function checkStripeSub(discordUserId: string) {
+  const user_association = await getUserAssociation(discordUserId);
+  return user_association?.subscription_status || false;
 }
 
-const fetchDbankSubstanceData = async (substanceName: string) => {
-  return fetchAndParseURL(
-    `https://data.mongodb-api.com/app/data-dwxsv/endpoint/drug?name=${substanceName}`
-  );
+async function startSubscription(discordUserId: string) {
+  const checkoutSession = await stripe.checkout.sessions.create({
+    payment_method_types: ["card"],
+    line_items: [
+      {
+        price: process.env.STRIPE_PLAN_ID,
+        quantity: 1,
+      },
+    ],
+    mode: "subscription",
+    metadata: { discord_id: discordUserId },
+    success_url: "https://psyai-patreon-linker-97bd2997eae8.herokuapp.com/success",
+    cancel_url: "https://psyai-patreon-linker-97bd2997eae8.herokuapp.com/cancel",
+  });
+
+  // Payment URL
+  return checkoutSession.url;
 }
 
-const fetchMolecule = (smiles: string) => {
-  return `http://hulab.rxnfinder.org/smi2img/${smiles}/`
+const postAndParseURL = async (url: string, payload: any) => {
+  try {
+    const options = {
+      method: 'POST',
+      uri: url,
+      headers: { "Openai-Api-Key": process.env.OPENAI_API_KEY, "Authorization": `Bearer ${process.env.BEARER_TOKEN}` },
+      body: payload,
+      json: true // Automatically stringifies the body to JSON
+    };
+
+    const responseData = await rp(options);
+    return { data: responseData }
+  } catch (error) {
+    console.error(`Error in postAndParseURL: ${error}`);
+    return null;
+  }
+}
+
+const fetchDoseCardFromPsyAI = async (substanceName: string, chatId: string) => {
+  try {
+    const raw = {
+      "model": process.env.LLM_MODEL_ID,
+      "question": `Generate a drug information card for ${substanceName}. Respond only with the card. Use the provided example and follow the exact syntax given.\n\n Example drug information card for Gabapentin:\n\n`
+          + createDrugInfoCard()
+          + `\n\nNote: Not every section from the example dose card is required, and you may add additional sections if needed. Please keep the formatting compact and uniform using Markdown.`,
+      "temperature": "0.4",
+      "max_tokens": 10000,
+  };  
+
+    return postAndParseURL(`${process.env.BRAIN_BASE_URL}/chat/` + chatId + "/question", raw)
+  } catch (error) {
+    console.error(`Error in fetchDoseCardFromPsyAI: ${error}`);
+    return null;
+  }
+}
+
+const fetchNewChatIdFromPsyAI = async (substanceName: string) => {
+  try {
+    const raw = {
+      "name": "Card => " + substanceName
+    }
+
+    return postAndParseURL(`${process.env.BRAIN_BASE_URL}/chat`, raw);
+  } catch (error) {
+    console.error(`Error in fetchNewChatIdFromPsyAI: ${error}`);
+    return null;
+  }
 }
 
 export const applicationCommandData = new SlashCommandBuilder()
@@ -117,372 +155,67 @@ export const applicationCommandData = new SlashCommandBuilder()
     .setName("substance")
     .setDescription("The substance you want information about")
     .setRequired(true))
-  .toJSON() as Discord.ApplicationCommandData;
+  .toJSON() as unknown as Discord.ApplicationCommandData;
 
-export async function performInteraction(interaction: Discord.CommandInteraction) {
-  // Capture messages posted to a given channel and remove all symbols and put everything into lower case
+  export async function performInteraction(interaction: Discord.CommandInteraction) {
+    try {
+      /*
+      const discordUserId = interaction.user.id;
+      // Check if the user has an active subscription
+      if (!(await checkStripeSub(discordUserId))) {
+        const paymentUrl = await startSubscription(discordUserId);
+        await interaction.user.send(`Hi there, friend!\n\nThat command requires an active subscription.\n\nSupport the devs today, for only $12.40 per YEAR!  ૮₍ ˶ᵔ ᵕᵔ˶₎ა  >[Subscribe Now](${paymentUrl})<`);
+      
+        // Optionally, you can also reply in the channel to acknowledge the command without revealing the subscription status
+        await interaction.reply({ content: "I've sent you an important message (privately) with further details... ˶ᵔᵕᵔ˶", ephemeral: true });
+      
+        return;
+      }
+      */
+      const substanceName = parseSubstanceName(interaction.options.getString("substance", true));
+      const substanceNameCap = substanceName.charAt(0)?.toUpperCase() + substanceName.slice(1);
+      console.log(`Requesting info for ${substanceName}`);
+      // Loads GraphQL query as "query" variable
+      const loadingEmbed = new Discord.MessageEmbed()
+        .setColor('#5921CF')
+        .setAuthor('PsyAI')
+        .setTitle(substanceNameCap + " drug information")
+        .addFields([{ name: '~~~~', value:  '【 Thinking ．．．⏳】'}, { name: 'Contact', value:  'Email: `0@sernyl.dev` // Discord: `sernyl`'}])
+        .setTimestamp()
+        .setURL('https://sojourns.io')
+        .setFooter('Powered by Sojourns', 'https://sernyl.io/logo-notext-dm.png');
+      await interaction.reply({embeds: [loadingEmbed]});
+      /* @ts-ignore */
+      const { data: dataChat } = await fetchNewChatIdFromPsyAI(substanceName);
+      if (!dataChat) {
+        await interaction.editReply("Sorry, I couldn't fetch the chat ID. Please try again later.");
+        return;
+      }
+      /* @ts-ignore */
+      const { data: dataQuestion } = await fetchDoseCardFromPsyAI(substanceName, dataChat.chat_id);
+      if (!dataQuestion) {
+        await interaction.editReply("Sorry, I couldn't fetch the dose card. Please try again later.");
+        return;
+      }
   
-  const substanceName = parseSubstanceName(interaction.options.getString("substance", true));
-
-  // Find the location of the substance object in the JSON and set substance
-  const custom_substance = locateCustomSheetLocation(substanceName);
-  const extra_info_result: Array<DBank.DBDrug> = await fetchDbankSubstanceData(substanceName[0].toUpperCase() + substanceName.slice(1));
-  const extra_info = extra_info_result.length > 0 ? extra_info_result[0] : undefined;
-  console.log(extra_info)
-  const moleculeImage = fetchMolecule((extra_info as DBank.DBDrug)['calculated-properties'].property.filter((p) => p.kind === "SMILES")[0].value);
-
-  // Checks to see if drug is on the customs list
-  if (custom_substance != undefined) {
-    console.log('Pulling from custom');
-
-    interaction.reply({ embeds: [ createPWChannelMessage(custom_substance, extra_info, moleculeImage) ], files: ["./assets/logo.png"] });
-  } else {
-    console.log('Pulling from PW');
-
-    console.log(`Requesting info for ${substanceName}`);
-    // Loads GraphQL query as "query" variable
-
-    const { data } = await fetchPWSubstanceData(substanceName);
-
-    // Logs API's returned object of requested substance
-    console.log("Substances response: " + JSON.stringify(data));
-
-    // Send a message to channel if there are zero or more than one substances returned by the API
-    // Not sure if the API in its current configuration can return more than one substance
-    if (data.substances.length === 0) {
-      console.log('Pulling from TS');
-
-      const tripSitURL = `http://tripbot.tripsit.me/api/tripsit/getDrug?name=${substanceName}`;
-
-      const responseData = await fetchAndParseURL(tripSitURL);
-
-      if (responseData.err === true) {
-        interaction.reply(`Error: No API data available for **${substanceName}**`);
-      } else {
-        const substance = responseData.data[0];
-
-        interaction.reply({ embeds: [ createTSChannelMessage(substance, extra_info) ], files: ["./assets/logo.png"] });
-      }
-
-      return;
-    } else if (data.substances.length > 1) {
-        interaction.reply(`There are multiple substances matching '${substanceName}' on PsychonautWiki.`);
-      return;
-    } else {
-      // Set substance to the first returned substance from PW API
-      const substance = data.substances[0];
-      interaction.reply({ embeds: [ createPWChannelMessage(substance, extra_info, moleculeImage) ], files: ["./assets/logo.png"] });
+      // Create a new MessageEmbed and give it a title and description
+      const embed = new Discord.MessageEmbed()
+        .setColor('#5921CF')
+        .setAuthor('PsyAI')
+        .setTitle(substanceNameCap)
+        .addFields([{ name: '~~~~', value:  dataQuestion.assistant}, { name: 'Contact', value:  'Email: `0@sernyl.dev` // Discord: `sernyl`'}])
+        .setTimestamp()
+        .setURL('https://sojourns.io')
+        .setFooter('Powered by Sojourns', 'https://sernyl.io/logo-notext-dm.png');
+  
+      // Edit the reply with the embed
+      await interaction.editReply({ embeds: [embed] });
+  
+    } catch (error) {
+      console.error(`Error in performInteraction: ${error}`);
+      await interaction.editReply("Sorry, something went wrong. Please try again later.");
     }
   }
-}
-
-
-
-// Functions
-//// Create a MessageEmbed powered message utilizing the various field builder functions
-function createPWChannelMessage(substance: PsychonautWikiSubstance, extra_info: DBank.DBDrug | undefined, moleculeImage: any): Discord.MessageEmbed {
-
-
-  return Helpers.TemplatedMessageEmbed()
-    .setTitle(`**${capitalize(substance.name)} drug information**`)
-    .setThumbnail(moleculeImage)
-    .addField(':information_source: __Description__', buildDbankDescriptionField(extra_info as DBank.DBDrug))
-    .addField(':warning: __Adverse Effects & Toxicity__', buildDbankToxicityField(extra_info as DBank.DBDrug))
-    .addField(':arrows_counterclockwise: __Metabolism__', buildDbankMetabolismField(extra_info as DBank.DBDrug))
-    .addField(':arrow_down: __Absorption__', buildDbankAbsorptionField(extra_info as DBank.DBDrug))
-    .addField(':woman_scientist: __Synthesis Reference__', buildDbankSynthesisField(extra_info as DBank.DBDrug))
-    .addField(':telescope: __Class__', buildChemicalClassField(substance, extra_info as DBank.DBDrug) + '\n' + buildPsychoactiveClassField(substance))
-    .addField(':scales: __Dosages__', `${buildPWDosageField(substance)}\n`, true)
-    .addField(':clock2: __Duration__', `${buildPWDurationField(substance)}\n`, true)
-    .addField(':warning: __Addiction potential__', buildAddictionPotentialField(substance), true)
-    .addField(':chart_with_upwards_trend: __Tolerance__', `${buildPWToleranceField(substance)}\n`, true)
-    .addField(':globe_with_meridians: __Links__', buildLinksField(substance));
-}
-
-//// Find the location of a given substance in the customs.json file
-function locateCustomSheetLocation(drug_lowercased: string) {
-  const locationsArray = [];
-
-  // Loop through the JSON file and add all of the names and locations to locationsArray
-  for (let i = 0; i < customsJSON.data.substances.length; i++) {
-    locationsArray.push({
-      name: lowerNoSpaceName(customsJSON.data.substances[i].name),
-      location: i
-    });
-  }
-
-  // Loop through the locationsArray to find the location of a given substance
-  for (let i = 0; i < locationsArray.length; i++) {
-    if (locationsArray[i].name.includes(drug_lowercased)) {
-      return customsJSON.data.substances[i];
-    }
-  }
-
-  return null;
-}
-
-// Capitalization function
-function capitalize(name: string) {
-  if (name === 'lsa') {
-    return name.toUpperCase();
-  } else {
-    return name[0].toUpperCase() + name.slice(1);
-  }
-}
-
-// Message builders
-function buildPWToleranceField(substance: PsychonautWikiSubstance) {
-  const tolerances = substance.tolerance;
-  const toleranceArr: string[] = [];
-
-  if (tolerances) {
-    const createToleranceString = function(label: string, value: string) {
-      return `**${capitalize(label)}**: ${value}`;
-    };
-
-    const pushToleranceToArray = function(label: string, value: string) {
-      if (value) {
-        toleranceArr.push(createToleranceString(label, value));
-      }
-    };
-
-    // If substance does not have standard tolerances return the custom tolerance
-    if (substance.name == 'ayahuasca' || substance.name == 'salvia') {
-      return substance.tolerance.tolerance;
-    } else {
-      // return standard tolerances
-      pushToleranceToArray('full', tolerances.full);
-      pushToleranceToArray('half', tolerances.half);
-      pushToleranceToArray('baseline', tolerances.zero);
-
-      return toleranceArr.join('\n');
-    }
-  } else {
-    return 'No information';
-  }
-}
-
-function buildPWDosageField(substance: PsychonautWikiSubstance) {
-  const messages = [];
-
-  for (let i = 0; i < substance.roas.length; i++) {
-    const roa = substance.roas[i];
-    const dose = roa.dose;
-    const name = capitalize(roa.name);
-
-    // Convert dosage object into a string
-    const dosageObjectToString = function(dosageTier: MinMax<number> | number) {
-      // Set substance dose units
-      const unit = dose?.units;
-
-      // If there's a dose return dose + unit
-      if (dosageTier) {
-        if (typeof dosageTier === 'number') {
-          return `${dosageTier}${unit}`;
-        }
-        // If there's a dose range return dose range + unit
-        return `${dosageTier.min} - ${dosageTier.max}${unit}`;
-      }
-    };
-
-    // Function for creating dosage message string
-    const createMessageString = function(label: string, value: MinMax<number> | number) {
-      return `**${capitalize(label)}**: ${dosageObjectToString(value)}`;
-    };
-
-    // Function to push dosage message to array
-    const pushDosageToMessageArray = function(label: string, value: MinMax<number> | number | undefined | null) {
-      if (value) {
-        messages.push(createMessageString(label, value));
-      }
-    };
-
-    if (substance.name == 'ayahuasca' || substance.name == 'datura') {
-      // Ayahuasca hardcoded message (can really be used for any substance without standard dosage information)
-      messages.push(`*(${name})*`);
-
-      // If nonstandard dose add dosage information to messages array
-      if (dose) {
-        messages.push(`${dose.dosage}`);
-        messages.push('');
-      } else {
-        // This should really never happen
-        messages.push('No dosage information.');
-      }
-    } else {
-      messages.push(`*(${name})*`);
-
-      // Add all dosage information
-      // Uses double conditional to prevent massive no information walls
-      if (dose) {
-        pushDosageToMessageArray('threshold', dose.threshold);
-        pushDosageToMessageArray('light', dose.light);
-        pushDosageToMessageArray('common', dose.common);
-        pushDosageToMessageArray('strong', dose.strong);
-        pushDosageToMessageArray('heavy', dose.heavy);
-        messages.push('');
-      } else {
-        // Or none if there is none
-        messages.push('No dosage information.');
-      }
-    }
-  }
-  // Join the message array into a string
-  return messages.length > 0 ? messages.join("\n") : "No dosage info."
-}
-
-type MinMax<T> = {
-  min: T | null;
-  max: T | null;
-}
-
-type MinMaxUnits<T> = {
-  min: T | null;
-  max: T | null;
-  units: string | null;
-}
-
-function buildPWDurationField(substance: PsychonautWikiSubstance) {
-  const messages = [];
-
-  for (let i = 0; i < substance.roas.length; i++) {
-    const roa = substance.roas[i];
-    const name = capitalize(roa.name);
-
-    // Parses duration object and returns string
-    const durationObjectToString = function(phaseDuration: MinMaxUnits<number>) {
-      // If there's a duration range return it + units
-      if (phaseDuration) {
-        return `${phaseDuration.min} - ${phaseDuration.max} ${
-          phaseDuration.units
-        }`;
-      }
-      return undefined;
-    };
-
-    // Function for creating message string
-    const createMessageString = function(label: string, phase: MinMaxUnits<number>) {
-      return `**${capitalize(label)}**: ${durationObjectToString(phase)}`;
-    };
-
-    // Function for pushing dosage message to array
-    const pushDurationToMessageArray = function(label: string, phase: MinMaxUnits<number> | null) {
-      if (phase) {
-        messages.push(createMessageString(label, phase));
-      }
-    };
-
-    if (substance.name) {
-      // Duration
-      messages.push(`*(${name})*`);
-
-      if (roa.duration) {
-        pushDurationToMessageArray('onset', roa.duration.onset);
-        pushDurationToMessageArray('comeup', roa.duration.comeup);
-        pushDurationToMessageArray('peak', roa.duration.peak);
-        pushDurationToMessageArray('offset', roa.duration.offset);
-        pushDurationToMessageArray('afterglow', roa.duration.afterglow);
-        pushDurationToMessageArray('total', roa.duration.total);
-        messages.push(' ');
-      } else {
-        messages.push('No duration information.');
-      }
-    } else {
-      console.log('Not sure why this would ever happen');
-      messages.push('An unknown error has occurred <@278301453620084736>');
-    }
-  }
-  return messages.length > 0 ? messages.join("\n") : "No duration info."
-}
-
-// Builds the chemical class field
-function buildChemicalClassField(substance: PsychonautWikiSubstance & TripsafeSubstance, extra_info: DBank.DBDrug) {
-  if (substance.class === undefined) {
-    if (extra_info.classification !== undefined) {
-      return `**[Chemical] Class**: ${extra_info.classification.class}` + '\n' + `**[Chemical] Superclass**: ${extra_info.classification.superclass}` + '\n' + `**[Chemical] Subclass**: ${extra_info.classification.subclass}` + '\n' + `**Substituent**: ${extra_info.classification.substituent.slice(0, 3)}`
-    }
-  }
-  if ((typeof substance.class != undefined) &&
-      (substance.class !== null) &&
-      (typeof substance.class.chemical != undefined) &&
-      (substance.class.chemical != null))
-  {
-    if (extra_info.classification !== undefined) {
-      return `**[Chemical] Class**: ${extra_info.classification.class}` + '\n' + `**[Chemical] Superclass**: ${extra_info.classification.superclass}` + '\n' + `**[Chemical] Subclass**: ${extra_info.classification.subclass}` + '\n' + `**Substituent**: ${extra_info.classification.substituent.slice(0, 3)}`
-    }
-    return `**Chemical**: ${substance.class.chemical[0]}`;
-  } else {
-    return 'No chemical class information.';
-  }
-}
-
-// Builds the psychoactive class field
-function buildPsychoactiveClassField(substance: PsychonautWikiSubstance) {
-  if ((typeof substance.class != undefined) &&
-      (substance.class !== null) &&
-      (typeof substance.class.psychoactive != undefined) &&
-      (substance.class.psychoactive != null))
-  {
-    return `**Psychoactive**: ${substance.class.psychoactive[0]}`;
-  } else {
-    return 'No psychoactive class information.';
-  }
-}
-
-// Builds the addiction potential field
-function buildAddictionPotentialField(substance: PsychonautWikiSubstance) {
-  if (substance.addictionPotential !== null) {
-    return `${capitalize(substance.addictionPotential)}\n`;
-  } else {
-    return 'No addiction potential information.';
-  }
-}
-
-// Builds the link field
-function buildLinksField(substance: PsychonautWikiSubstance) {
-  return `[PsychonautWiki](https://psychonautwiki.org/wiki/${ substance.name.replace(/ /g, '_',) }) - [Effect Index](https://www.effectindex.com) - [Drug combination chart](https://wiki.tripsit.me/images/3/3a/Combo_2.png)`;
-}
-
-function createTSChannelMessage(substance: TripsafeSubstance, extra_info: DBank.DBDrug | undefined): Discord.MessageEmbed {
-  return Helpers.TemplatedMessageEmbed()
-    .setTitle(`**${substance.pretty_name} drug information**`)
-    .addField(':warning: __Adverse Effects & Toxicity__', buildDbankToxicityField(extra_info as DBank.DBDrug))
-    .addField(':arrows_counterclockwise: __Metabolism__', buildDbankMetabolismField(extra_info as DBank.DBDrug))
-    .addField(':arrow_down: __Absorption__', buildDbankAbsorptionField(extra_info as DBank.DBDrug))
-    .addField(':telescope: __Class__', buildChemicalClassField(substance, extra_info as DBank.DBDrug) + '\n' + buildPsychoactiveClassField(substance))
-    .addField(':scales: __Dosages__', `${buildTSDosageField(substance)}\n`, true)
-    .addField(':clock2: __Duration__', `${buildTSDurationField(substance)}\n`, true)
-    .addField(':globe_with_meridians: __Links__', buildTSLinksField(substance));
-}
-
-// Build TS dosage field
-function buildTSDosageField(substance: TripsafeSubstance) {
-  console.log(`in buildTSDosageField -- ${JSON.stringify(substance.formatted_dose)}`)
-
-  if ((typeof substance.formatted_dose != undefined) &&
-      (substance.formatted_dose != null))
-  {
-    // try fancy formatting
-    const substanceName = Object.keys(substance.formatted_dose)[0];
-    return Object.entries(substance.formatted_dose[substanceName]).map(([intensity, dosageRange]) => {
-      return `**${capitalize(intensity)}**: ${dosageRange}`;
-    }).join("\n");
-  }
-
-  return `${substance.properties.dose}`;
-}
-
-// Build TS duration field
-function buildTSDurationField(substance: TripsafeSubstance) {
-  return `${substance.properties.duration}`;
-}
-
-// Build TS links field
-function buildTSLinksField(substance: TripsafeSubstance) {
-  return `[PsychonautWiki](https://psychonautwiki.org/wiki/${
-    substance.name
-  })\n[Effect Index](https://www.effectindex.com)\n[Drug combination chart](http://wiki.tripsit.me/images/3/3a/Combo_2.png)\n[TripSit](http://www.tripsit.me)\n\nInformation sourced from TripSit`;
-}
 
 // Parses and sanitizes substance name
 function parseSubstanceName(str: string) {
@@ -491,29 +224,7 @@ function parseSubstanceName(str: string) {
 }
 
 function lowerNoSpaceName(str: string) {
-    return str.toLowerCase()
+  return str.toLowerCase()
     .replace(/^[^\s]+ /, '') // remove first word
     .replace(/ /g, '');
 }
-
-function buildDbankDescriptionField(extra_info: DBank.DBDrug) {
-  return extra_info.description;
-}
-
-function buildDbankToxicityField(extra_info: DBank.DBDrug) {
-  return extra_info.toxicity.replace('<sub>', '').replace('</sub>', '');
-}
-
-function buildDbankMetabolismField(extra_info: DBank.DBDrug) {
-  return extra_info.metabolism;
-}
-
-function buildDbankAbsorptionField(extra_info: DBank.DBDrug) {
-  return extra_info.absorption;
-}
-
-function buildDbankSynthesisField(extra_info: DBank.DBDrug) {
-  return extra_info['synthesis-reference'];
-}
-
-
