@@ -54,7 +54,7 @@ async function createUserAssociation(discordUserId: string) {
   try {
     const { data, error } = await supabase
       .from('user_association')
-      .upsert([{ discord_id: discordUserId, subscription_status: false, trial_prompts: 5 }]);
+      .upsert([{ discord_id: discordUserId, subscription_status: false, stripe_id: "placeholder", trial_prompts: 5 }]);
 
     if (error) {
       console.error(error);
