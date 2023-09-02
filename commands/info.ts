@@ -50,6 +50,25 @@ function createDrugInfoCard(): string {
   return infoCard;
 }
 
+async function createUserAssociation(discordUserId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('user_association')
+      .upsert([{ discord_id: discordUserId, subscription_status: false, trial_prompts: 5 }]);
+
+    if (error) {
+      console.error(error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error(`Error creating user association: ${error}`);
+    return null;
+  }
+}
+
+
 async function getUserAssociation(discordUserId: string) {
   try {
     const { data, error } = await supabase
@@ -58,6 +77,10 @@ async function getUserAssociation(discordUserId: string) {
       .eq('discord_id', discordUserId)
       .single();
 
+    if (!data) {
+      return await createUserAssociation(discordUserId);
+    }
+    
     if (error) {
       console.error(error);
       return null;
@@ -156,14 +179,30 @@ export const applicationCommandData = new SlashCommandBuilder()
     try {
 
       const discordUserId = interaction.user.id;
-      // Check if the user has an active subscription
-      if (!(await checkStripeSub(discordUserId))) {
+      const user_association = await getUserAssociation(discordUserId);
+
+      // If no record exists or an error occurred, exit early
+      if (!user_association) {
+        // Handle error (maybe send a message to the user or log the error)
+        return;
+      }
+
+      // Check if the user has an active subscription or any trial_prompts left
+      if (!user_association.subscription_status && user_association.trial_prompts > 0) {
+        // Decrease the trial_prompts by 1
+        const { error } = await supabase
+          .from('user_association')
+          .update({ trial_prompts: user_association.trial_prompts - 1 })
+          .eq('discord_id', discordUserId);
+          
+        if (error) {
+          console.error(error);
+          // Handle the error (consider sending a message to the user)
+        }
+      } else if (!user_association.subscription_status && user_association.trial_prompts <= 0) {
+        // Send the subscription message because the user is out of trial_prompts
         const paymentUrl = await startSubscription(discordUserId);
-        await interaction.user.send(`Hi there, friend!\n\nThat command requires an active subscription.\n\nSupport the devs today, for only $12.40 per YEAR!  ૮₍ ˶ᵔ ᵕᵔ˶₎ა  >[Subscribe Now](${paymentUrl})<`);
-      
-        // Optionally, you can also reply in the channel to acknowledge the command without revealing the subscription status
-        await interaction.reply({ content: "I've sent you an important message (privately) with further details... ˶ᵔᵕᵔ˶", ephemeral: true });
-      
+        await interaction.user.send(`Hi there, friend!\n\nYour trial has ended.\n\nSupport the devs today, for only $12.40 per YEAR!  ૮₍ ˶ᵔ ᵕᵔ˶₎ა  >[Subscribe Now](${paymentUrl})<`);
         return;
       }
 
