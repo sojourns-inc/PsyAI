@@ -102,9 +102,9 @@ const fetchDoseCardFromPsyAI = async (substanceName: string, chatId: string) => 
   try {
     const raw = {
       "model": process.env.LLM_MODEL_ID,
-      "question": `${substanceName}\n\n(Please respond in a conversational manner. If the context doesn't have specific information about the query, you can say something like 'I'm not sure, but...' or 'I don't have that information, however...'. Please limit your response to 2000 characters max.)`,
+      "question": `${substanceName}\n\n(Please respond in a conversational manner. If the context doesn't have specific information about the query, you can say something like 'I'm not sure, but...' or 'I don't have that information, however...'. Please limit your response to 1500 characters max.)`,
       "temperature": 0.5,
-      "max_tokens": 600,
+      "max_tokens": 500,
     };
   
 
