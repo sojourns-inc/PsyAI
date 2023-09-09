@@ -102,9 +102,9 @@ const fetchDoseCardFromPsyAI = async (substanceName: string, chatId: string) => 
   try {
     const raw = {
       "model": process.env.LLM_MODEL_ID,
-      "question": `${substanceName}\n\n(Please respond in a conversational manner. If the context doesn't have specific information about the query, you can say something like 'I'm not sure, but...' or 'I don't have that information, however...'. Please limit your response to 1500 characters max.)`,
+      "question": `${substanceName}\n\n(Please respond in a conversational manner. If the context doesn't have specific information about the query, you can say something like 'I'm not sure, but...' or 'I don't have that information, however...'. Please limit your response to 2000 characters max.)`,
       "temperature": 0.5,
-      "max_tokens": 500,
+      "max_tokens": 1000,
     };
   
 
@@ -185,7 +185,8 @@ export async function performInteraction(interaction: Discord.CommandInteraction
       await interaction.editReply("Sorry, I couldn't fetch the dose card. Please try again later.");
       return;
     }
-    await interaction.editReply("> " + query + "\n\n" + "```\n" + dataQuestion.assistant + "\n```");
+    let truncatedQuery = query.length > 100 ? query.substring(0, 97) + "..." : query;
+    await interaction.editReply("> " + truncatedQuery + "\n\n" + "```\n" + dataQuestion.assistant + "\n```");
   } catch (error) {
     console.error(`Error in performInteraction: ${error}`);
     await interaction.editReply("Sorry, something went wrong. Please try again later.");
