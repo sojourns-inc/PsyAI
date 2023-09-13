@@ -98,11 +98,11 @@ const postAndParseURL = async (url: string, payload: any) => {
   }
 }
 
-const fetchDoseCardFromPsyAI = async (substanceName: string, chatId: string) => {
+const fetchDoseCardFromPsyAI = async (query: string, chatId: string) => {
   try {
     const raw = {
       "model": process.env.LLM_MODEL_ID,
-      "question": `${substanceName}\n\n(Please respond in a conversational manner. If the context doesn't have specific information about the query, you can say something like 'I'm not sure, but...' or 'I don't have that information, however...'. Please limit your response to 2000 characters max.)`,
+      "question": `${query}\n\n(Please respond conversationally to the query without mentioning any external information sources. If you need to, you can say something like "I'm afraid I don't have all the details on that, but from what I know..." and then provide a helpful, relevant response based on your own knowledge. Please keep the response under 2000 characters.)`,
       "temperature": 0.5,
       "max_tokens": 1000,
     };
