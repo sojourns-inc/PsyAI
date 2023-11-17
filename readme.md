@@ -6,10 +6,6 @@
 
 The **drug abuse epidemic** that has been sweeping the the United States has cost 63,600 lives in 2016 alone [CDC](https://www.cdc.gov/nchs/products/databriefs/db294.htm), with a median age of 20. Every day PsyAI provides scientifically backed best practices to tens of thousands of users that helps save lives.
 
-## Message content restriction
-
-Beginning September 1, 2022, Discord has restricted access to message content for verified bots, meaning the main PsyAI instance is no longer able to execute v1 commands. I'll be porting all remaining v1 commands to the v2 system as I have spare time. Pull requests are welcome.
-
 ## Features
 
 - Substance harm reduction information
