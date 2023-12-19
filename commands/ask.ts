@@ -89,9 +89,9 @@ const postAndParseURL = async (url: string, payload: any) => {
       body: payload,
       json: true // Automatically stringifies the body to JSON
     };
-  
+
     const responseData = await rp(options);
-    return {data: responseData}
+    return { data: responseData }
   } catch (error) {
     console.error(`Error in postAndParseURL: ${error}`);
     return null;
@@ -102,11 +102,11 @@ const fetchDoseCardFromPsyAI = async (query: string, chatId: string) => {
   try {
     const raw = {
       "model": process.env.LLM_MODEL_ID,
-      "question": `${query}\n\n(Please respond conversationally to the query without mentioning any external information sources. If you need to, you can say something like "I'm afraid I don't have all the details on that, but from what I know..." and then provide a helpful, relevant response based on your own knowledge. Please keep the response under 1024 characters.)`,
+      "question": `Check your context, and find out: ${query}\n\n(Please respond conversationally to the query. If additional relevant details are available, incorporate that information naturally into your response without directly mentioning the source. If the available information does not fully address the query, feel free to rely on your own knowledge to provide a helpful, friendly response within 30000 characters.)`,
       "temperature": 0.5,
-      "max_tokens": 1000,
+      "max_tokens": 4000,
     };
-  
+
 
     return postAndParseURL(`${process.env.BRAIN_BASE_URL}/chat/` + chatId + "/question", raw)
   } catch (error) {
@@ -137,6 +137,29 @@ export const applicationCommandData = new SlashCommandBuilder()
     .setRequired(true))
   .toJSON() as unknown as Discord.ApplicationCommandData;
 
+// Utility function to split text into chunks of a specific size
+function splitTextIntoParagraphs(text, maxChunkSize) {
+  let chunks = [];
+  let currentChunk = "";
+
+  text.split("\n").forEach(paragraph => {
+    if ((currentChunk.length + paragraph.length) > maxChunkSize) {
+      chunks.push(currentChunk);
+      currentChunk = paragraph;
+    } else {
+      currentChunk += (currentChunk.length > 0 ? "\n" : "") + paragraph;
+    }
+  });
+
+  // Add the last chunk if it's not empty
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+}
+
+
 export async function performInteraction(interaction: Discord.CommandInteraction) {
   try {
 
@@ -149,14 +172,18 @@ export async function performInteraction(interaction: Discord.CommandInteraction
       return;
     }
 
-    // Check if the user has an active subscription or any trial_prompts left
-    if (!user_association.subscription_status && user_association.trial_prompts > 0) {
+    if (interaction.guild != null && (interaction.guild.id == "1032772277223297085" || interaction.guild.id == "1037189729294225518")) {
+      console.log("Guild ID: " + interaction.guild.id);
+      console.log("Guild Name: " + interaction.guild.name);
+      console.log("Guild Owner ID: " + interaction.user.id);
+      // The Culture Cave or Josie's Guild
+    } else if ((!user_association.subscription_status && user_association.trial_prompts > 0)) { // Culture Cave
       // Decrease the trial_prompts by 1
       const { error } = await supabase
         .from('user_association')
         .update({ trial_prompts: user_association.trial_prompts - 1 })
         .eq('discord_id', discordUserId);
-        
+
       if (error) {
         console.error(error);
         // Handle the error (consider sending a message to the user)
@@ -172,7 +199,7 @@ export async function performInteraction(interaction: Discord.CommandInteraction
     const query = interaction.options.getString("query", true);
     console.log(`Requesting info for ${query}`);
     // Loads GraphQL query as "query" variable
-    await interaction.reply('【Ｌｏａｄｉｎｇ．．．】');
+    await interaction.deferReply();
     /* @ts-ignore */
     const { data: dataChat } = await fetchNewChatIdFromPsyAI(query);
     if (!dataChat) {
@@ -187,15 +214,24 @@ export async function performInteraction(interaction: Discord.CommandInteraction
     }
     let truncatedQuery = query.length > 100 ? query.substring(0, 97) + "..." : query;
     await interaction.deleteReply();
-    // Create a new MessageEmbed and give it a title and description
+    // Splitting the assistant text into chunks
+    const assistantTextChunks = splitTextIntoParagraphs(dataQuestion.assistant, 1024);
+
+    // Create a new MessageEmbed
     const embed = new Discord.MessageEmbed()
       .setColor('#5921CF')
       .setAuthor('PsyAI')
       .setTitle(truncatedQuery)
-      .addFields([{ name: 'Answer', value:  dataQuestion.assistant}, { name: 'Contact', value:  'Email: `0@sernyl.dev` // Discord: `sernyl`'}])
       .setTimestamp()
       .setURL('https://sojourns.io')
-      .setFooter('𝙱𝚎𝚎𝚙 𝙱𝚘𝚘𝚙!\n𝙿𝚕𝚎𝚊𝚜𝚎 𝚍𝚒𝚜𝚛𝚎𝚐𝚊𝚛𝚍 𝚎𝚟𝚎𝚛𝚢𝚝𝚑𝚒𝚗𝚐 𝙸 𝚜𝚊𝚢 𝚊𝚜 𝚏𝚒𝚌𝚝𝚒𝚘𝚗. 𝙳𝚘 𝚗𝚘𝚝, 𝚞𝚗𝚍𝚎𝚛 𝚊𝚗𝚢 𝚌𝚒𝚛𝚌𝚞𝚖𝚜𝚝𝚊𝚗𝚌𝚎𝚜, 𝚞𝚜𝚎 𝚊𝚗𝚢 𝚒𝚗𝚏𝚘𝚛𝚖𝚊𝚝𝚒𝚘𝚗 𝙸 𝚙𝚛𝚘𝚟𝚒𝚍𝚎 𝚏𝚘𝚛 𝚊𝚗𝚢 𝚙𝚞𝚛𝚙𝚘𝚜𝚎. 𝙸 𝚑𝚊𝚟𝚎 𝚗𝚘 𝚚𝚞𝚊𝚕𝚒𝚏𝚒𝚌𝚊𝚝𝚒𝚘𝚗𝚜 𝚘𝚛 𝚎𝚡𝚙𝚎𝚛𝚝𝚒𝚜𝚎 𝚘𝚗 𝚝𝚑𝚎𝚜𝚎 𝚝𝚘𝚙𝚒𝚌𝚜. 𝙿𝚕𝚎𝚊𝚜𝚎 𝚙𝚘𝚒𝚗𝚝 𝚘𝚞𝚝 𝚊𝚗𝚢 𝚏𝚕𝚊𝚠𝚜, 𝚒𝚗𝚊𝚌𝚌𝚞𝚛𝚊𝚌𝚒𝚎𝚜, 𝚘𝚛 𝚖𝚒𝚜𝚝𝚊𝚔𝚎𝚜 𝚒𝚗 𝚖𝚢 𝚜𝚝𝚊𝚝𝚎𝚖𝚎𝚗𝚝𝚜. 𝙸 𝚌𝚊𝚗𝚗𝚘𝚝 𝚊𝚗𝚍 𝚍𝚘 𝚗𝚘𝚝 𝚒𝚗𝚝𝚎𝚗𝚍 𝚝𝚘 𝚙𝚛𝚘𝚟𝚒𝚍𝚎 𝚊𝚗𝚢 𝚏𝚊𝚌𝚝𝚞𝚊𝚕 𝚊𝚍𝚟𝚒𝚌𝚎 𝚘𝚛 𝚒𝚗𝚏𝚘𝚛𝚖𝚊𝚝𝚒𝚘𝚗. 𝙸 𝚊𝚙𝚙𝚛𝚎𝚌𝚒𝚊𝚝𝚎 𝚢𝚘𝚞𝚛 𝚞𝚗𝚍𝚎𝚛𝚜𝚝𝚊𝚗𝚍𝚒𝚗𝚐.');
+      .setFooter('𝙱𝚎𝚎𝚙 𝙱𝚘𝚘𝚙!\n𝙿𝚕𝚎𝚊𝚜𝚎 𝚍𝚒𝚜𝚛𝚎𝚐𝚊𝚛𝚍 𝚎𝚟𝚎𝚛𝚢𝚝𝚑𝚒𝚗𝚐 𝙸 𝚜𝚊𝚢 𝚊𝚜 𝚏𝚒𝚌𝚝𝚒𝚘𝚗. 𝙸 𝚌𝚊𝚗𝚗𝚘𝚝 𝚊𝚗𝚍 𝚍𝚘 𝚗𝚘𝚝 𝚒𝚗𝚝𝚎𝚗𝚍 𝚝𝚘 𝚙𝚛𝚘𝚟𝚒𝚍𝚎 𝚊𝚗𝚢 𝚏𝚊𝚌𝚝𝚞𝚊𝚕 𝚊𝚍𝚟𝚒𝚌𝚎 𝚘𝚛 𝚒𝚗𝚏𝚘𝚛𝚖𝚊𝚝𝚒𝚘𝚗.');
+
+    // Adding chunks as fields to the embed
+    assistantTextChunks.forEach((chunk, index) => {
+      embed.addField(`‎`, chunk);
+    });
+
+    embed.addField('Contact', 'Email: `0@sernyl.dev` // Discord: `sernyl`');
 
     // Edit the reply with the embed
     await interaction.followUp({ embeds: [embed] });
