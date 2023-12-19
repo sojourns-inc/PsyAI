@@ -80,7 +80,7 @@ async function getUserAssociation(discordUserId: string) {
     if (!data) {
       return await createUserAssociation(discordUserId);
     }
-    
+
     if (error) {
       console.error(error);
       return null;
@@ -138,14 +138,13 @@ const postAndParseURL = async (url: string, payload: any) => {
 const fetchDoseCardFromPsyAI = async (substanceName: string, chatId: string) => {
   try {
     const raw = {
-      "model": process.env.LLM_MODEL_ID,
-      "question": `Generate a drug information card for ${substanceName}. Respond only with the card. Use the provided example and follow the exact syntax given.\n\n Example drug information card for Gabapentin:\n\n`
-          + createDrugInfoCard()
-          + `\n\nNote: Not every section from the example dose card is required, and you may add additional sections if needed. Please keep the formatting compact and uniform using Markdown, minimizing the space between the sections.`,
-      "temperature": "0.25",
-      "max_tokens": 1000,
-  };  
-
+      model: process.env.LLM_MODEL_ID, // Assuming LLM_MODEL_ID is a previously defined variable
+      question: `Generate a drug information card for ${substanceName}. Respond only with the card. Use the provided example and follow the exact syntax given.\n\n Example drug information card for Gabapentin:\n\n`
+        + createDrugInfoCard() // Assuming create_drug_info_card is a function defined elsewhere
+        + `\n\nNotes 1. Even though the dosage information in the example card (for Gabapentin) relates to one particular route of administration (ORAL), the information provided by the context for ${substanceName} might pertain to a different route of administration (for example, 'IV' instead of 'ORAL'). Check the context for dosing ranges and units related to the route of administration of ${substanceName}. If there is a scarcity of data about ${substanceName}, obtain this information from anecdotal reports, if they are in your context, or from wherever possible. \n\n2. Not every section from the example dose card is required, and you may add additional sections if needed. Please keep the formatting compact and uniform using HTML.\n\n3. If a dose card for GBL or Gamma-Butyrolactone is requested, the 'threhsold' dose should be 0.3ml, the 'light' dose should start at 0.5ml, the onset should be 3-10 min, and the duration should be 1-2 hours.`,
+      temperature: 0.15,
+      max_tokens: 4096
+    };
     return postAndParseURL(`${process.env.BRAIN_BASE_URL}/chat/` + chatId + "/question", raw)
   } catch (error) {
     console.error(`Error in fetchDoseCardFromPsyAI: ${error}`);
@@ -175,81 +174,109 @@ export const applicationCommandData = new SlashCommandBuilder()
     .setRequired(true))
   .toJSON() as unknown as Discord.ApplicationCommandData;
 
-  export async function performInteraction(interaction: Discord.CommandInteraction) {
-    try {
+// Utility function to split text into chunks of a specific size
+function splitTextIntoParagraphs(text, maxChunkSize) {
+  let chunks = [];
+  let currentChunk = "";
 
-      const discordUserId = interaction.user.id;
-      const user_association = await getUserAssociation(discordUserId);
-
-      // If no record exists or an error occurred, exit early
-      if (!user_association) {
-        // Handle error (maybe send a message to the user or log the error)
-        return;
-      }
-
-      // Check if the user has an active subscription or any trial_prompts left
-      if (!user_association.subscription_status && user_association.trial_prompts > 0) {
-        // Decrease the trial_prompts by 1
-        const { error } = await supabase
-          .from('user_association')
-          .update({ trial_prompts: user_association.trial_prompts - 1 })
-          .eq('discord_id', discordUserId);
-          
-        if (error) {
-          console.error(error);
-          // Handle the error (consider sending a message to the user)
-        }
-      } else if (!user_association.subscription_status && user_association.trial_prompts <= 0) {
-        // Send the subscription message because the user is out of trial_prompts
-        const paymentUrl = await startSubscription(discordUserId);
-        await interaction.user.send(`Hi there, friend!\n\nYour trial has ended.\n\nSupport the devs today, for only $12.40 per YEAR!  ૮₍ ˶ᵔ ᵕᵔ˶₎ა  >[Subscribe Now](${paymentUrl})<`);
-        return;
-      }
-
-      const substanceName = parseSubstanceName(interaction.options.getString("substance", true));
-      const substanceNameCap = substanceName.charAt(0)?.toUpperCase() + substanceName.slice(1);
-      console.log(`Requesting info for ${substanceName}`);
-      // Loads GraphQL query as "query" variable
-      const loadingEmbed = new Discord.MessageEmbed()
-        .setColor('#5921CF')
-        .setAuthor('PsyAI')
-        .setTitle(substanceNameCap + " drug information")
-        .addFields([{ name: '~~~~', value:  '【 Thinking ．．．⏳】'}, { name: 'Contact', value:  'Email: `0@sernyl.dev` // Discord: `sernyl`'}])
-        .setTimestamp()
-        .setURL('https://sojourns.io')
-        .setFooter('Powered by Sojourns', 'https://sernyl.io/logo-notext-dm.png');
-      await interaction.reply({embeds: [loadingEmbed]});
-      /* @ts-ignore */
-      const { data: dataChat } = await fetchNewChatIdFromPsyAI(substanceName);
-      if (!dataChat) {
-        await interaction.editReply("Sorry, I couldn't fetch the chat ID. Please try again later.");
-        return;
-      }
-      /* @ts-ignore */
-      const { data: dataQuestion } = await fetchDoseCardFromPsyAI(substanceName, dataChat.chat_id);
-      if (!dataQuestion) {
-        await interaction.editReply("Sorry, I couldn't fetch the dose card. Please try again later.");
-        return;
-      }
-  
-      // Create a new MessageEmbed and give it a title and description
-      const embed = new Discord.MessageEmbed()
-        .setColor('#5921CF')
-        .setAuthor('PsyAI')
-        .setTitle(substanceNameCap)
-        .addFields([{ name: '~~~~', value:  dataQuestion.assistant}, { name: 'Contact', value:  'Email: `0@sernyl.dev` // Discord: `sernyl`'}])
-        .setTimestamp()
-        .setURL('https://sojourns.io')
-        .setFooter('𝙱𝚎𝚎𝚙 𝙱𝚘𝚘𝚙!\n𝙿𝚕𝚎𝚊𝚜𝚎 𝚍𝚒𝚜𝚛𝚎𝚐𝚊𝚛𝚍 𝚎𝚟𝚎𝚛𝚢𝚝𝚑𝚒𝚗𝚐 𝙸 𝚜𝚊𝚢 𝚊𝚜 𝚏𝚒𝚌𝚝𝚒𝚘𝚗. 𝙳𝚘 𝚗𝚘𝚝, 𝚞𝚗𝚍𝚎𝚛 𝚊𝚗𝚢 𝚌𝚒𝚛𝚌𝚞𝚖𝚜𝚝𝚊𝚗𝚌𝚎𝚜, 𝚞𝚜𝚎 𝚊𝚗𝚢 𝚒𝚗𝚏𝚘𝚛𝚖𝚊𝚝𝚒𝚘𝚗 𝙸 𝚙𝚛𝚘𝚟𝚒𝚍𝚎 𝚏𝚘𝚛 𝚊𝚗𝚢 𝚙𝚞𝚛𝚙𝚘𝚜𝚎. 𝙸 𝚑𝚊𝚟𝚎 𝚗𝚘 𝚚𝚞𝚊𝚕𝚒𝚏𝚒𝚌𝚊𝚝𝚒𝚘𝚗𝚜 𝚘𝚛 𝚎𝚡𝚙𝚎𝚛𝚝𝚒𝚜𝚎 𝚘𝚗 𝚝𝚑𝚎𝚜𝚎 𝚝𝚘𝚙𝚒𝚌𝚜. 𝙿𝚕𝚎𝚊𝚜𝚎 𝚙𝚘𝚒𝚗𝚝 𝚘𝚞𝚝 𝚊𝚗𝚢 𝚏𝚕𝚊𝚠𝚜, 𝚒𝚗𝚊𝚌𝚌𝚞𝚛𝚊𝚌𝚒𝚎𝚜, 𝚘𝚛 𝚖𝚒𝚜𝚝𝚊𝚔𝚎𝚜 𝚒𝚗 𝚖𝚢 𝚜𝚝𝚊𝚝𝚎𝚖𝚎𝚗𝚝𝚜. 𝙸 𝚌𝚊𝚗𝚗𝚘𝚝 𝚊𝚗𝚍 𝚍𝚘 𝚗𝚘𝚝 𝚒𝚗𝚝𝚎𝚗𝚍 𝚝𝚘 𝚙𝚛𝚘𝚟𝚒𝚍𝚎 𝚊𝚗𝚢 𝚏𝚊𝚌𝚝𝚞𝚊𝚕 𝚊𝚍𝚟𝚒𝚌𝚎 𝚘𝚛 𝚒𝚗𝚏𝚘𝚛𝚖𝚊𝚝𝚒𝚘𝚗. 𝙸 𝚊𝚙𝚙𝚛𝚎𝚌𝚒𝚊𝚝𝚎 𝚢𝚘𝚞𝚛 𝚞𝚗𝚍𝚎𝚛𝚜𝚝𝚊𝚗𝚍𝚒𝚗𝚐.');
-  
-      // Edit the reply with the embed
-      await interaction.editReply({ embeds: [embed] });
-  
-    } catch (error) {
-      console.error(`Error in performInteraction: ${error}`);
-      await interaction.editReply("Sorry, something went wrong. Please try again later.");
+  text.split("\n").forEach(paragraph => {
+    if ((currentChunk.length + paragraph.length) > maxChunkSize) {
+      chunks.push(currentChunk);
+      currentChunk = paragraph;
+    } else {
+      currentChunk += (currentChunk.length > 0 ? "\n" : "") + paragraph;
     }
+  });
+
+  // Add the last chunk if it's not empty
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
   }
+
+  return chunks;
+}
+export async function performInteraction(interaction: Discord.CommandInteraction) {
+  try {
+    const discordUserId = interaction.user.id;
+    const user_association = await getUserAssociation(discordUserId);
+
+    // If no record exists or an error occurred, exit early
+    if (!user_association) {
+      // Handle error (maybe send a message to the user or log the error)
+      return;
+    }
+
+    if (interaction.guild != null && (interaction.guild.id == "1032772277223297085" || interaction.guild.id == "1037189729294225518")) {
+      console.log("Guild ID: " + interaction.guild.id);
+      console.log("Guild Name: " + interaction.guild.name);
+      console.log("Guild Owner ID: " + interaction.user.id);
+      // The Culture Cave or Josie's Guild
+    } else if ((!user_association.subscription_status && user_association.trial_prompts > 0)) { // Culture Cave
+      // Decrease the trial_prompts by 1
+      const { error } = await supabase
+        .from('user_association')
+        .update({ trial_prompts: user_association.trial_prompts - 1 })
+        .eq('discord_id', discordUserId);
+
+      if (error) {
+        console.error(error);
+        // Handle the error (consider sending a message to the user)
+      }
+    } else if (!user_association.subscription_status && user_association.trial_prompts <= 0) {
+      // Send the subscription message because the user is out of trial_prompts
+      const paymentUrl = await startSubscription(discordUserId);
+      await interaction.user.send(`Hi there, friend!\n\nYour trial has ended.\n\nSupport the devs today, for only $12.40 per YEAR!  ૮₍ ˶ᵔ ᵕᵔ˶₎ა  >[Subscribe Now](${paymentUrl})<`);
+      return;
+    }
+
+    const substanceName = parseSubstanceName(interaction.options.getString("substance", true));
+    const substanceNameCap = substanceName.charAt(0)?.toUpperCase() + substanceName.slice(1);
+    console.log(`Requesting info for ${substanceName}`);
+    // Loads GraphQL query as "query" variable
+    const loadingEmbed = new Discord.MessageEmbed()
+      .setColor('#5921CF')
+      .setAuthor('PsyAI')
+      .setTitle(substanceNameCap + " drug information")
+      .addFields([{ name: '~~~~', value: '【 Thinking ．．．⏳】' }, { name: 'Contact', value: 'Email: `0@sernyl.dev` // Discord: `sernyl`' }])
+      .setTimestamp()
+      .setURL('https://sojourns.io')
+      .setFooter('Powered by Sojourns', 'https://sernyl.io/logo-notext-dm.png');
+    await interaction.deferReply();
+    /* @ts-ignore */
+    const { data: dataChat } = await fetchNewChatIdFromPsyAI(substanceName);
+    if (!dataChat) {
+      await interaction.editReply("Sorry, I couldn't fetch the chat ID. Please try again later.");
+      return;
+    }
+    /* @ts-ignore */
+    const { data: dataQuestion } = await fetchDoseCardFromPsyAI(substanceName, dataChat.chat_id);
+    if (!dataQuestion) {
+      await interaction.editReply("Sorry, I couldn't fetch the dose card. Please try again later.");
+      return;
+    }
+    const assistantTextChunks = splitTextIntoParagraphs(dataQuestion.assistant, 1024);
+    // Create a new MessageEmbed and give it a title and description
+    const embed = new Discord.MessageEmbed()
+      .setColor('#5921CF')
+      .setAuthor('PsyAI')
+      .setTitle(substanceNameCap)
+      //.addFields([{ name: '~~~~', value:  dataQuestion.assistant}, { name: 'Contact', value:  'Email: `0@sernyl.dev` // Discord: `sernyl`'}])
+      .setTimestamp()
+      .setURL('https://sojourns.io')
+      .setFooter('𝙱𝚎𝚎𝚙 𝙱𝚘𝚘𝚙!\n𝙿𝚕𝚎𝚊𝚜𝚎 𝚍𝚒𝚜𝚛𝚎𝚐𝚊𝚛𝚍 𝚎𝚟𝚎𝚛𝚢𝚝𝚑𝚒𝚗𝚐 𝙸 𝚜𝚊𝚢 𝚊𝚜 𝚏𝚒𝚌𝚝𝚒𝚘𝚗. 𝙸 𝚌𝚊𝚗𝚗𝚘𝚝 𝚊𝚗𝚍 𝚍𝚘 𝚗𝚘𝚝 𝚒𝚗𝚝𝚎𝚗𝚍 𝚝𝚘 𝚙𝚛𝚘𝚟𝚒𝚍𝚎 𝚊𝚗𝚢 𝚏𝚊𝚌𝚝𝚞𝚊𝚕 𝚊𝚍𝚟𝚒𝚌𝚎 𝚘𝚛 𝚒𝚗𝚏𝚘𝚛𝚖𝚊𝚝𝚒𝚘𝚗.');
+
+    // Adding chunks as fields to the embed
+    assistantTextChunks.forEach((chunk, index) => {
+      embed.addField(`‎`, chunk);
+    });
+    // Edit the reply with the embed
+    await interaction.editReply({ embeds: [embed] });
+
+  } catch (error) {
+    console.error(`Error in performInteraction: ${error}`);
+    await interaction.editReply("Sorry, something went wrong. Please try again later.");
+  }
+}
 
 // Parses and sanitizes substance name
 function parseSubstanceName(str: string) {
