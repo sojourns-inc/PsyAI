@@ -6,7 +6,8 @@ export function sanitizeSubstanceName(drug: string) {
   if (drug === "pcp") return "Phencyclidine"
   if (drug === "mxp") return "Methoxphenidine"
   if (drug === "14bdo") return "1,4-Butanediol"
-  if (drug === "quaalude") return "Methaqualone"
+  if (drug === "quaalude") return "Methaqualone (Quaalude)"
+  if (drug === "ludes") return "Methaqualone (Quaalude)"
   if (drug === "eph") return "Ethylphenidate"
   if (drug === "ipph") return "Isopropylphenidate"
   if (drug === "hdmp28") return "Methylnaphthidate"
@@ -15,6 +16,7 @@ export function sanitizeSubstanceName(drug: string) {
   if (drug === "dxm") return "dextromethorphan"
   if (drug === "dph") return "diphenhydramine"
   if (drug === "ghb") return "GHB"
+  if (drug === "gbl") return "gamma-butyrolactone"
   if (drug === "diclaz") return "Diclazepam"
 
   // Lysergamides: LSD, 1P-LSD, ETH-LAD, 1P-ETH-LAD, AL-LAD, ALD-52, LSA, LSD,
