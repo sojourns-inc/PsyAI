@@ -53,7 +53,7 @@ export const v1commands: { [name: string]: (client: Discord.Client, message: Dis
 import { applicationCommandData as about_data, performInteraction as about } from "./about";
 import { applicationCommandData as info_data,  performInteraction as info_perform } from './info';
 import { applicationCommandData as ask_data,  performInteraction as ask_perform } from './ask';
-import { applicationCommandData as fx_data,  performInteraction as fx_perform } from './fx';
+// import { applicationCommandData as fx_data,  performInteraction as fx_perform } from './fx'; TODO: DEPRECATED
 import { applicationCommandData as sub_data,  performInteraction as sub_perform } from './sub';
 
 export interface V2Command {
@@ -66,6 +66,6 @@ export const v2commands: { [key: string]: V2Command } = {
     //"gtoke": { data: gtoke_data, perform: gtoke },
     "info":  { data: info_data,  perform: info_perform },
     "ask":  { data: ask_data,  perform: ask_perform },
-    "fx":  { data: fx_data,  perform: fx_perform },
+    // "fx":  { data: fx_data,  perform: fx_perform }, TODO: DEPRECATED
     "sub": { data: sub_data, perform: sub_perform }
 };

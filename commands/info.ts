@@ -226,6 +226,7 @@ export async function performInteraction(interaction: Discord.CommandInteraction
       // Send the subscription message because the user is out of trial_prompts
       const paymentUrl = await startSubscription(discordUserId);
       await interaction.user.send(`Hi there, friend!\n\nYour trial has ended.\n\nSupport the devs today, for only $12.40 per YEAR!  ૮₍ ˶ᵔ ᵕᵔ˶₎ა  >[Subscribe Now](${paymentUrl})<`);
+      await interaction.editReply("Please check your direct messages!");
       return;
     }
 

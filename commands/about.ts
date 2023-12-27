@@ -9,6 +9,19 @@ export const applicationCommandData = {
 } as Discord.ApplicationCommandData;
 
 export function performInteraction(interaction: Discord.CommandInteraction) {
+  let welcome_text = `Welcome to PsyAI Bot! PsyAI is your AI-powered guide that answers questions about drugs in an unbiased, judgement-free way. The bot sources dosage, duration, tolerance, and harm reduction information from [PsychonautWiki](http://www.psychonautwiki.org), [Effect Index](https://effectindex.com) and a plethora of curated information sources.
+  
+  - If you aren't subscribed, send the /sub command to do so.
+
+  - Type /info [Drug Name] to request info about a particular substance.
+  
+  - Type /ask [Your question here] to ask me general questions about substances. Make sure to include your question after '/ask'!
+  
+  - The bot will ONLY respond to messages that start with either /ask, or /info.
+  
+  For help, please contact:
+  
+  Email: 0@sernyl.dev / Telegram: @swirnyl / Discord: sernyl`
   const embed = Helpers.TemplatedMessageEmbed()
     .addField( 'About PsyAI',
       `PsyAI is your AI-powered guide that answers questions about drugs in an unbiased, judgement-free way. The bot sources dosage, duration, tolerance, and harm reduction information from [PsychonautWiki](http://www.psychonautwiki.org), [Effect Index](https://effectindex.com) and a plethora of curated information sources.\n\n𝙱𝚎𝚎𝚙 𝙱𝚘𝚘𝚙!
